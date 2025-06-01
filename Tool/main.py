@@ -15,7 +15,7 @@ from Tool.screens import (
     SearchScreen,
     DownloadSuccessScreen,
     MusicPlayerScreen,
-    SettingsScreen
+    SettingsScreen,
 )
 from Tool.youtube_api import YouTubeAPI
 from Tool.downloader import Downloader
@@ -28,32 +28,33 @@ logger = logging.getLogger(__name__)
 
 class Settings:
     """Manage application settings"""
+
     DEFAULT_SETTINGS = {
         "download_path": str(Path("./downloads").resolve()),
         "audio_quality": "0",  # 0 best
-        "max_search_results": 10
+        "max_search_results": 10,
     }
-    
+
     def __init__(self):
         self.settings_file = Path.home() / ".ytdownloader" / "settings.json"
         self.settings = self.load_settings()
-    
+
     def load_settings(self) -> dict:
         """Load settings from file or return defaults"""
         try:
             if self.settings_file.exists():
-                with open(self.settings_file, 'r') as f:
+                with open(self.settings_file, "r") as f:
                     return {**self.DEFAULT_SETTINGS, **json.load(f)}
             return self.DEFAULT_SETTINGS.copy()
         except Exception as e:
             logger.error(f"Failed to load settings: {e}")
             return self.DEFAULT_SETTINGS.copy()
-    
+
     def save_settings(self, settings: dict) -> None:
         """Save settings to file"""
         try:
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, 'w') as f:
+            with open(self.settings_file, "w") as f:
                 json.dump(settings, f, indent=4)
             self.settings = settings
         except Exception as e:
@@ -63,7 +64,7 @@ class Settings:
 
 class YouTubeDownloaderApp(App):
     """Main application"""
-    
+
     CSS = """
     #welcome-container {
         align: center middle;
@@ -269,23 +270,23 @@ class YouTubeDownloaderApp(App):
         margin: 1;
     }
     
-    #playlist-label {
+    #library-label {
         text-style: bold;
         color: $accent;
         margin-top: 1;
     }
     
-    #playlist-container {
+    #library-container {
         height: 15;
         border: solid $primary;
         margin: 1;
     }
     
-    #playlist > ListItem {
+    #library > ListItem {
         padding: 1;
     }
     
-    #playlist > ListItem:hover {
+    #library > ListItem:hover {
         background: $accent 20%;
     }
     
@@ -311,13 +312,13 @@ class YouTubeDownloaderApp(App):
         text-align: center;
     }
     """
-    
+
     TITLE = "YouTube Download"
-    
+
     def __init__(self):
         super().__init__()
         self.settings = Settings()
-    
+
     def on_mount(self) -> None:
         """Initialize app"""
         try:

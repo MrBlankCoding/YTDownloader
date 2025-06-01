@@ -76,17 +76,17 @@ class MusicPlayerScreen(Screen):
                 # Title section
                 yield Static("🎵 Music Player", id="player-title", classes="title")
 
-                # Playlist section
-                with Container(id="playlist-section", classes="section"):
+                # Libary section
+                with Container(id="library-section", classes="section"):
                     yield Static(
-                        "📋 Playlist",
-                        id="playlist-label",
+                        "library",
+                        id="library-label",
                         classes="section-title",
                     )
                     yield ScrollableContainer(
-                        ListView(id="playlist"),
-                        id="playlist-container",
-                        classes="playlist-scroll",
+                        ListView(id="library"),
+                        id="library-container",
+                        classes="library-scroll",
                     )
 
                 # Now Playing section
@@ -117,29 +117,29 @@ class MusicPlayerScreen(Screen):
             self.notify("VLC initialization failed!", severity="error")
             return
 
-        self.refresh_playlist()
-        self._focus_playlist()
+        self.refresh_library()
+        self._focus_library()
 
     def _is_vlc_available(self) -> bool:
         """Check if VLC is properly initialized"""
         return self.vlc_player is not None and self.vlc_instance is not None
 
-    def _focus_playlist(self) -> None:
-        """Focus on playlist widget with error handling"""
+    def _focus_library(self) -> None:
+        """Focus on library widget with error handling"""
         try:
-            playlist = self.query_one("#playlist", ListView)
-            playlist.focus()
+            library = self.query_one("#library", ListView)
+            library.focus()
         except Exception as e:
-            logger.debug(f"Could not focus playlist: {e}")
+            logger.debug(f"Could not focus library: {e}")
 
-    def refresh_playlist(self) -> None:
-        """Refresh the playlist with improved error handling and performance"""
+    def refresh_library(self) -> None:
+        """Refresh the library with improved error handling and performance"""
         try:
             download_path = self._get_download_path()
             if not download_path:
                 return
 
-            self._clear_playlist()
+            self._clear_library()
             mp3_files = self._get_mp3_files(download_path)
 
             if not mp3_files:
@@ -147,34 +147,42 @@ class MusicPlayerScreen(Screen):
                 return
 
             self._load_songs(mp3_files)
-            self._update_playlist_ui()
+            self._update_library_ui()
 
         except Exception as e:
-            logger.error(f"Failed to refresh playlist: {e}")
-            self.notify(f"Failed to refresh playlist: {str(e)}", severity="error")
+            logger.error(f"Failed to refresh library: {e}")
+            self.notify(f"Failed to refresh library: {str(e)}", severity="error")
 
     def _get_download_path(self) -> Optional[Path]:
-        """Get and validate download path"""
+        """Get and validate download path from app settings"""
         try:
-            # Replace this with the correct way to access your app's download path setting
-            download_path_str = getattr(self.app, "download_path", None)
+            app_settings = getattr(self.app, "settings", None)
+            if app_settings is None:
+                self.notify("App settings not available!", severity="error")
+                return None
+
+            download_path_str = app_settings.settings.get("download_path")
             if not download_path_str:
                 self.notify("Download path not configured!", severity="error")
                 return None
+
             download_path = Path(download_path_str)
             if not download_path.exists():
                 self.notify("Download directory not found!", severity="error")
                 return None
+
             return download_path
-        except KeyError:
-            self.notify("Download path not configured!", severity="error")
+
+        except Exception as e:
+            logger.error(f"Error accessing download path: {e}")
+            self.notify("Failed to access download path!", severity="error")
             return None
 
-    def _clear_playlist(self) -> None:
-        """Clear current playlist data"""
+    def _clear_library(self) -> None:
+        """Clear current library data"""
         self.songs.clear()
-        playlist = self.query_one("#playlist", ListView)
-        playlist.clear()
+        library = self.query_one("#library", ListView)
+        library.clear()
 
     def _get_mp3_files(self, download_path: Path) -> List[Path]:
         """Get sorted MP3 files from download directory"""
@@ -223,19 +231,16 @@ class MusicPlayerScreen(Screen):
             return title
         return title[: self.MAX_TITLE_LENGTH] + "…"
 
-    def _update_playlist_ui(self) -> None:
-        """Update playlist UI with loaded songs"""
-        playlist = self.query_one("#playlist", ListView)
+    def _update_library_ui(self) -> None:
+        """Update library UI with loaded songs"""
+        library = self.query_one("#library", ListView)
 
         from textual.widgets import ListItem  # Ensure ListItem is imported
 
         for song in self.songs:
             static = Static(song["display"], markup=False)
             item = ListItem(static)
-            playlist.append(item)
-
-        if self.songs:
-            self.notify(f"Found {len(self.songs)} songs", severity="information")
+            library.append(item)
 
     def play_song(self, index: int) -> None:
         """Play a song by index with improved error handling"""
@@ -299,9 +304,9 @@ class MusicPlayerScreen(Screen):
         )
 
     def _highlight_current_song(self, index: int) -> None:
-        """Highlight current song in playlist"""
-        playlist = self.query_one("#playlist", ListView)
-        playlist.index = index
+        """Highlight current song in library"""
+        library = self.query_one("#library", ListView)
+        library.index = index
 
     def update_progress(self) -> None:
         """Update playback progress with improved state handling"""
@@ -372,7 +377,7 @@ class MusicPlayerScreen(Screen):
             self.play_song(next_index)
         else:
             self.stop()
-            self.notify("Reached end of playlist", severity="information")
+            self.notify("Reached end of library", severity="information")
 
     def _has_next_song(self) -> bool:
         """Check if there's a next song to play"""
@@ -393,8 +398,8 @@ class MusicPlayerScreen(Screen):
 
     def _play_selected_or_first_song(self) -> None:
         """Play selected song or first song if none selected"""
-        playlist = self.query_one("#playlist", ListView)
-        index = playlist.index if playlist.index is not None else 0
+        library = self.query_one("#library", ListView)
+        index = library.index if library.index is not None else 0
         if index < len(self.songs):
             self.play_song(index)
 
@@ -464,9 +469,9 @@ class MusicPlayerScreen(Screen):
             self.play_song(0)
 
     def action_refresh(self) -> None:
-        """Refresh playlist"""
+        """Refresh library"""
         self.stop()
-        self.refresh_playlist()
+        self.refresh_library()
 
     def action_toggle_play(self) -> None:
         """Toggle play/pause action"""
@@ -499,11 +504,11 @@ class MusicPlayerScreen(Screen):
             logger.debug(f"Error during VLC cleanup: {e}")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Handle song selection from playlist"""
+        """Handle song selection from library"""
         try:
-            playlist = self.query_one("#playlist", ListView)
-            if playlist.index is not None and self._is_valid_song_index(playlist.index):
-                self.play_song(playlist.index)
+            library = self.query_one("#library", ListView)
+            if library.index is not None and self._is_valid_song_index(library.index):
+                self.play_song(library.index)
         except Exception as e:
             logger.error(f"Error handling song selection: {e}")
 

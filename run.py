@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Entry point for the YouTube Downloader application."""
+"""Entry"""
 
 import sys
 from Tool.main import main
