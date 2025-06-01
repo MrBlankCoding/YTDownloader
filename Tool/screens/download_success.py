@@ -5,7 +5,7 @@ from textual.widgets import Header, Footer, Static
 from textual.app import ComposeResult
 
 class DownloadSuccessScreen(Screen):
-    """Start download success"""
+    """Download Success Screen"""
 
     BINDINGS = [
         Binding("ctrl+n", "new_search", "New Search"),
@@ -22,7 +22,7 @@ class DownloadSuccessScreen(Screen):
         yield Header()
         with Container():
             with Vertical(id="success-container"):
-                yield Static("Download Complete!", id="success-title")
+                yield Static("Download Complete!!!!!", id="success-title")
                 yield Static("", id="spacer1")
                 yield Static("Downloaded Song:", id="song-label")
                 yield Static(f"   {self.song_title}", id="song-title")

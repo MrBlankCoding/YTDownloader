@@ -1,53 +1,40 @@
 """Download functionality."""
 
 import os
-import logging
 import asyncio
 from pathlib import Path
 from typing import Dict
 import subprocess
 
-from .errors import DownloadError
-
-# Setup file logging
-log_path = Path(__file__).parent.parent / "logs"
-log_path.mkdir(exist_ok=True)
-log_file = log_path / "downloader.log"
-
-# Configure logging to both file and console
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-)
-
-logger = logging.getLogger(__name__)
+from ..errors import DownloadError
 
 
 class Downloader:
-    """Audio handling"""
+    """Downloading with DLP"""
 
     def __init__(self, settings):
         self.settings = settings
         self._check_ytdlp()
 
     def _check_ytdlp(self):
-        """Check if YT-DLP is installed"""
+        """Check for instalation of dlp"""
         try:
             subprocess.run(
                 ["yt-dlp", "--version"], capture_output=True, check=True, timeout=5
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
-            raise DownloadError("yt-dlp not found. Install with: pip install yt-dlp")
+            raise DownloadError("yt-dlp not found. If your running the build make sure its installed in global python environment or in the venv you are using. You can install it with `pip install yt-dlp`.")
 
     async def download(self, url: str) -> Dict:
-        """Download audio using settings"""
+        """Download."""
+        # Path from settings
         return await asyncio.get_event_loop().run_in_executor(
             None, self._download_sync, url, self.settings.settings["download_path"]
         )
 
     def _download_sync(self, url: str, output_dir: str) -> Dict:
         """synchronous download"""
+        # No need for aync here as its one download at a time
         output_path = Path(output_dir).resolve()
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -62,21 +49,18 @@ class Downloader:
             str(output_path / "%(title)s.%(ext)s"),
             "--embed-metadata",
             "--no-warnings",
-            "--no-library",
             url,
         ]
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             if result.returncode == 0:
-                logger.info(f"Downloaded: {url}")
                 return {
                     "success": True,
                     "path": str(output_path),
                     "message": "Success!",
                 }
             else:
-                logger.error(f"Failed with {result.stderr}")
                 return {
                     "success": False,
                     "path": None,

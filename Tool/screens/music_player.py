@@ -1,22 +1,21 @@
 import logging
 from typing import Dict, List, Optional
 from pathlib import Path
-from datetime import timedelta
 import vlc
 import mutagen.mp3
 
 from textual.screen import Screen
 from textual.binding import Binding
-from textual.containers import Container, ScrollableContainer, Vertical
-from textual.widgets import Header, Footer, Static, ListView, ProgressBar
+from textual.containers import Container, ScrollableContainer, Vertical, Horizontal
+from textual.widgets import Header, Footer, Static, ListView, ListItem
 from textual.timer import Timer
 from textual.app import ComposeResult
 
 logger = logging.getLogger(__name__)
 
-
+#Okay this file is WAYY to long for what it does and it PMO. 
 class MusicPlayerScreen(Screen):
-    """Music player screen with improved UI and code quality"""
+    """Music player"""
 
     BINDINGS = [
         Binding("escape", "back_to_welcome", "Back"),
@@ -33,10 +32,133 @@ class MusicPlayerScreen(Screen):
         Binding("b", "previous", "Previous"),
     ]
 
-    # Constants for better maintainability
+    #Basic config.
     DEFAULT_VOLUME = 70
     PROGRESS_UPDATE_INTERVAL = 0.5
-    MAX_TITLE_LENGTH = 60
+    MAX_TITLE_LENGTH = 50
+
+    #Badd css :(
+    CSS = """
+    Screen {
+        background: #0f0f0f;
+        color: #ffffff;
+    }
+
+    #main-container {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    #content-area {
+        width: 100%;
+        height: 1fr;
+        padding: 1 2;
+        margin: 0;
+    }
+
+    #library-header {
+        width: 100%;
+        height: auto;
+        text-align: center;
+        color: #1db954;
+        text-style: bold;
+        margin: 1 0;
+        padding: 0 1;
+    }
+
+    #library-container {
+        width: 100%;
+        height: 1fr;
+        border: round #333333;
+        padding: 1;
+        margin: 0;
+    }
+
+    #library {
+        width: 100%;
+        height: 100%;
+        scrollbar-size: 1 1;
+        scrollbar-background: #333333;
+        scrollbar-color: #1db954;
+    }
+
+    ListItem {
+        height: 3;
+        padding: 0 1;
+        margin: 0;
+        border: none;
+    }
+
+    ListItem:hover {
+        background: #1a1a1a;
+    }
+
+    ListItem.-selected {
+        background: #1db954 20%;
+        border-left: solid #1db954;
+    }
+
+    .song-item {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    .song-title {
+        color: #ffffff;
+        text-style: bold;
+    }
+
+    .song-duration {
+        color: #b3b3b3;
+        text-style: dim;
+    }
+
+    #now-playing-bar {
+        width: 100%;
+        height: 4;
+        background: #181818;
+        border-top: solid #333333;
+        padding: 0 2;
+    }
+
+    #now-playing-content {
+        width: 100%;
+        height: 100%;
+        align: center middle;
+    }
+
+    #current-track-info {
+        text-align: center;
+        color: #ffffff;
+    }
+
+    .track-title {
+        color: #ffffff;
+        text-style: bold;
+    }
+
+    .track-time {
+        color: #b3b3b3;
+        text-style: dim;
+    }
+
+    .no-song {
+        color: #666666;
+        text-style: dim;
+        text-align: center;
+    }
+
+    .status-message {
+        text-align: center;
+        color: #b3b3b3;
+        text-style: dim;
+        margin: 2 0;
+    }
+    """
 
     def __init__(self):
         super().__init__()
@@ -47,118 +169,77 @@ class MusicPlayerScreen(Screen):
         self.total_time = 0
         self.update_timer: Optional[Timer] = None
 
-        # Initialize VLC with better error handling
-        self.vlc_instance = None
-        self.vlc_player = None
-        self._initialize_vlc()
-
-    def _initialize_vlc(self) -> None:
-        """Initialize VLC player with proper error handling"""
-        try:
-            self.vlc_instance = vlc.Instance("--no-xlib")
-            if self.vlc_instance is not None:
-                self.vlc_player = self.vlc_instance.media_player_new()
-                self.vlc_player.audio_set_volume(self.DEFAULT_VOLUME)
-                logger.info("VLC initialized successfully")
-            else:
-                self.vlc_player = None
-                logger.error("VLC instance is None, cannot create media player")
-        except Exception as e:
-            logger.error(f"Failed to initialize VLC: {e}")
-            self.vlc_instance = None
-            self.vlc_player = None
+        self.vlc_instance = vlc.Instance("--no-xlib")
+        if self.vlc_instance is None:
+            raise RuntimeError("Failed to initialize VLC instance.")
+        self.vlc_player = self.vlc_instance.media_player_new()
+        self.vlc_player.audio_set_volume(self.DEFAULT_VOLUME)
 
     def compose(self) -> ComposeResult:
-        """Compose the UI with improved structure and styling"""
+        """Layout composition."""
         yield Header()
+
         with Container(id="main-container"):
-            with Vertical(id="player-container"):
-                # Title section
-                yield Static("🎵 Music Player", id="player-title", classes="title")
+            with Vertical(id="content-area"):
+                yield Static("Your Library!", id="library-header")
 
-                # Libary section
-                with Container(id="library-section", classes="section"):
-                    yield Static(
-                        "library",
-                        id="library-label",
-                        classes="section-title",
-                    )
+                with Container(id="library-container"):
                     yield ScrollableContainer(
-                        ListView(id="library"),
-                        id="library-container",
-                        classes="library-scroll",
+                        ListView(id="library"), id="library-scroll"
                     )
 
-                # Now Playing section
-                with Container(id="now-playing-section", classes="section now-playing"):
+            with Container(id="now-playing-bar"):
+                with Horizontal(id="now-playing-content"):
                     yield Static(
-                        "🎧 Now Playing",
-                        id="now-playing-label",
-                        classes="section-title",
+                        "♪ No track selected",
+                        id="current-track-info",
+                        classes="no-song",
                     )
-                    yield Static(
-                        "No song selected",
-                        id="current-song",
-                        classes="current-song",
-                    )
-                    yield Static(
-                        "00:00 / 00:00",
-                        id="time-display",
-                        classes="time-display",
-                    )
-                    yield ProgressBar(
-                        total=100, id="progress-bar", classes="progress-bar"
-                    )
+
         yield Footer()
 
     def on_mount(self) -> None:
-        """Initialize player on mount"""
-        if not self._is_vlc_available():
-            self.notify("VLC initialization failed!", severity="error")
-            return
-
+        """Initialization after mount."""
         self.refresh_library()
-        self._focus_library()
+        self.query_one("#library", ListView).focus()
 
-    def _is_vlc_available(self) -> bool:
-        """Check if VLC is properly initialized"""
-        return self.vlc_player is not None and self.vlc_instance is not None
-
-    def _focus_library(self) -> None:
-        """Focus on library widget with error handling"""
-        try:
-            library = self.query_one("#library", ListView)
-            library.focus()
-        except Exception as e:
-            logger.debug(f"Could not focus library: {e}")
+    def _show_status_message(self, message: str) -> None:
+        """Show status messages"""
+        library = self.query_one("#library", ListView)
+        library.clear()
+        status_item = ListItem(Static(message, classes="status-message"))
+        library.append(status_item)
 
     def refresh_library(self) -> None:
-        """Refresh the library with improved error handling and performance"""
-        try:
-            download_path = self._get_download_path()
-            if not download_path:
-                return
+        """Refresh the library"""
+        download_path = self._get_download_path()
+        if not download_path:
+            return
 
-            self._clear_library()
-            mp3_files = self._get_mp3_files(download_path)
+        self.songs.clear()
+        library = self.query_one("#library", ListView)
+        library.clear()
 
-            if not mp3_files:
-                self.notify("No music files found!", severity="warning")
-                return
+        mp3_files = list(download_path.glob("*.mp3"))
+        mp3_files = sorted(mp3_files, key=lambda x: x.stat().st_mtime, reverse=True)
 
-            self._load_songs(mp3_files)
-            self._update_library_ui()
+        if not mp3_files:
+            self._show_status_message("No music files found. Download some!")
+            return
 
-        except Exception as e:
-            logger.error(f"Failed to refresh library: {e}")
-            self.notify(f"Failed to refresh library: {str(e)}", severity="error")
+        for file in mp3_files:
+            song_data = self._extract_song_data(file)
+            if song_data:
+                self.songs.append(song_data)
+
+        self._update_library_ui()
 
     def _get_download_path(self) -> Optional[Path]:
-        """Get and validate download path from app settings"""
+        """get download path froms settings."""
         try:
             app_settings = getattr(self.app, "settings", None)
             if app_settings is None:
-                self.notify("App settings not available!", severity="error")
+                self.notify("App settings not available", severity="error")
                 return None
 
             download_path_str = app_settings.settings.get("download_path")
@@ -174,129 +255,86 @@ class MusicPlayerScreen(Screen):
             return download_path
 
         except Exception as e:
-            logger.error(f"Error accessing download path: {e}")
-            self.notify("Failed to access download path!", severity="error")
+            logger.error(f"Failed getting download path {e}")
+            self.notify("Failed getting download path is it deleted?", severity="error")
             return None
-
-    def _clear_library(self) -> None:
-        """Clear current library data"""
-        self.songs.clear()
-        library = self.query_one("#library", ListView)
-        library.clear()
-
-    def _get_mp3_files(self, download_path: Path) -> List[Path]:
-        """Get sorted MP3 files from download directory"""
-        mp3_files = list(download_path.glob("*.mp3"))
-        return sorted(mp3_files, key=lambda x: x.stat().st_mtime, reverse=True)
-
-    def _load_songs(self, mp3_files: List[Path]) -> None:
-        """Load song metadata from MP3 files"""
-        for file in mp3_files:
-            try:
-                song_data = self._extract_song_data(file)
-                if song_data:
-                    self.songs.append(song_data)
-            except Exception as e:
-                logger.error(f"Error loading {file}: {e}")
 
     def _extract_song_data(self, file: Path) -> Optional[Dict]:
-        """Extract metadata from a single MP3 file"""
-        try:
-            audio = mutagen.mp3.MP3(file)
-            if audio.info.length is None:
-                return None
-
-            duration_seconds = int(audio.info.length)
-            duration_str = self._format_duration(duration_seconds)
-            display_title = self._truncate_title(file.stem)
-
-            return {
-                "path": str(file),
-                "title": file.stem,
-                "duration": duration_str,
-                "duration_seconds": duration_seconds,
-                "display": f"♪ {display_title}\n  ⏱ {duration_str}",
-            }
-        except Exception:
+        """Extract metadata"""
+        audio = mutagen.mp3.MP3(file)
+        if audio.info.length is None:
             return None
 
+        duration_seconds = int(audio.info.length)
+        duration_str = self._format_duration(duration_seconds)
+        display_title = self._truncate_title(file.stem)
+
+        return {
+            "path": str(file),
+            "title": file.stem,
+            "duration": duration_str,
+            "duration_seconds": duration_seconds,
+            "display_title": display_title,
+        }
+
     def _format_duration(self, seconds: int) -> str:
-        """Format duration seconds to HH:MM:SS or MM:SS string"""
-        duration_str = str(timedelta(seconds=seconds))
-        return duration_str.split(".")[0] if "." in duration_str else duration_str
+        """Format duration"""
+        minutes, secs = divmod(seconds, 60)
+        return f"{minutes:02d}:{secs:02d}"
 
     def _truncate_title(self, title: str) -> str:
-        """Truncate title if too long"""
+        """Truncate title"""
         if len(title) <= self.MAX_TITLE_LENGTH:
             return title
         return title[: self.MAX_TITLE_LENGTH] + "…"
 
     def _update_library_ui(self) -> None:
-        """Update library UI with loaded songs"""
+        """Create songs in library"""
         library = self.query_one("#library", ListView)
-
-        from textual.widgets import ListItem  # Ensure ListItem is imported
+        library.clear()
 
         for song in self.songs:
-            static = Static(song["display"], markup=False)
-            item = ListItem(static)
+            song_text = f" {song['display_title']}\n{song['duration']}"
+            song_widget = Static(song_text, classes="song-item")
+            item = ListItem(song_widget)
             library.append(item)
 
     def play_song(self, index: int) -> None:
-        """Play a song by index with improved error handling"""
-        if not self._is_valid_song_index(index) or not self._is_vlc_available():
+        """play a song by index with VLC"""
+        if not (0 <= index < len(self.songs)):
             return
 
-        try:
-            self._stop_current_playback()
-            song = self.songs[index]
+        self.stop()
+        song = self.songs[index]
 
-            if self._start_playback(song, index):
-                self._update_now_playing_ui(song)
-                self._start_progress_tracking()
-                self._highlight_current_song(index)
-                self.notify(f"Now playing: {song['title']}", severity="information")
+        if self.vlc_instance is None:
+            logger.error("VLC instance is not initialized.")
+            self._show_status_message("VLC is not available. Cannot play song.")
+            return
 
-        except Exception as e:
-            logger.error(f"Failed to play song: {e}")
-            self.notify(f"Failed to play song: {str(e)}", severity="error")
+        media = self.vlc_instance.media_new(song["path"])
+        self.vlc_player.set_media(media)
+        self.vlc_player.play()
 
-    def _is_valid_song_index(self, index: int) -> bool:
-        """Check if song index is valid"""
-        return 0 <= index < len(self.songs)
+        self.current_song_index = index
+        self.is_playing = True
+        self.current_time = 0
+        self.total_time = song["duration_seconds"]
 
-    def _stop_current_playback(self) -> None:
-        """Stop current playback if any"""
-        if self.current_song_index is not None:
-            self.stop()
-
-    def _start_playback(self, song: Dict, index: int) -> bool:
-        """Start playback for a song"""
-        try:
-            if self.vlc_instance is None or self.vlc_player is None:
-                logger.error("VLC instance or player is None, cannot start playback")
-                return False
-            media = self.vlc_instance.media_new(song["path"])
-            self.vlc_player.set_media(media)
-            self.vlc_player.play()
-
-            self.current_song_index = index
-            self.is_playing = True
-            self.current_time = 0
-            self.total_time = song["duration_seconds"]
-            return True
-        except Exception as e:
-            logger.error(f"Failed to start playback: {e}")
-            return False
+        self._update_now_playing_ui(song)
+        self._start_progress_tracking()
+        self._highlight_current_song(index)
+        self.notify(f"{song['title']}")
 
     def _update_now_playing_ui(self, song: Dict) -> None:
-        """Update now playing display"""
-        current_song_widget = self.query_one("#current-song", Static)
-        current_song_widget.update(f"♪ {song['title']}")
-        current_song_widget.add_class("playing")
+        """Display song progress"""
+        track_info = self.query_one("#current-track-info", Static)
+        track_info.update(f"{song['display_title']}")
+        track_info.remove_class("no-song")
+        track_info.add_class("track-title")
 
     def _start_progress_tracking(self) -> None:
-        """Start progress tracking timer"""
+        """Start timer"""
         if self.update_timer:
             self.update_timer.stop()
         self.update_timer = self.set_interval(
@@ -304,177 +342,104 @@ class MusicPlayerScreen(Screen):
         )
 
     def _highlight_current_song(self, index: int) -> None:
-        """Highlight current song in library"""
+        """Highlight the active song."""
         library = self.query_one("#library", ListView)
-        library.index = index
+        if 0 <= index < len(library):
+            library.index = index
 
     def update_progress(self) -> None:
-        """Update playback progress with improved state handling"""
-        if not self._should_update_progress():
+        """Update as song progresses"""
+        if not self.is_playing or self.current_song_index is None:
             return
 
-        try:
-            if self.vlc_player is not None:
-                state = self.vlc_player.get_state()
+        state = self.vlc_player.get_state()
 
-                if state == 3:  # 3 corresponds to Playing state in VLC
-                    self._update_playing_progress()
-                elif state == 6:  # 6 corresponds to Ended state in VLC
-                    self.auto_next()
-                elif state == 6:  # 6 corresponds to Error state in VLC
-                    self._handle_playback_error()
-
-        except Exception as e:
-            logger.error(f"Error updating progress: {e}")
-
-    def _should_update_progress(self) -> bool:
-        """Check if progress should be updated"""
-        return (
-            self.is_playing
-            and self.current_song_index is not None
-            and self._is_vlc_available()
-        )
-
-    def _update_playing_progress(self) -> None:
-        """Update progress for currently playing song"""
-        if self.vlc_player is not None:
+        if state == 3:  # Playing
             position_ms = self.vlc_player.get_time()
             if position_ms >= 0:
                 self.current_time = min(position_ms // 1000, self.total_time)
+                self._update_time_display()
+        elif state == 6:  # Ended
+            self.auto_next()
 
-                progress = (
-                    (self.current_time / self.total_time) * 100
-                    if self.total_time > 0
-                    else 0
-                )
-
-                self._update_progress_display(progress)
-
-    def _update_progress_display(self, progress: float) -> None:
-        """Update progress bar and time display"""
-        progress_bar = self.query_one("#progress-bar", ProgressBar)
-        progress_bar.progress = min(100, progress)
-
+    def _update_time_display(self) -> None:
+        """Update time display"""
         current_str = self._format_duration(self.current_time)
         total_str = self._format_duration(self.total_time)
 
-        time_display = self.query_one("#time-display", Static)
-        time_display.update(f"{current_str} / {total_str}")
-
-    def _handle_playback_error(self) -> None:
-        """Handle playback errors"""
-        self.notify("Playback error occurred", severity="error")
-        self.stop()
+        track_info = self.query_one("#current-track-info", Static)
+        if self.current_song_index is not None:
+            song = self.songs[self.current_song_index]
+            track_info.update(f"♪ {song['display_title']}\n{current_str} / {total_str}")
 
     def auto_next(self) -> None:
-        """Automatically play next song when current song ends"""
-        if self._has_next_song() and self.current_song_index is not None:
-            next_index = (
-                self.current_song_index + 1
-                if self.current_song_index is not None
-                else 0
-            )
-            self.play_song(next_index)
-        else:
-            self.stop()
-            self.notify("Reached end of library", severity="information")
-
-    def _has_next_song(self) -> bool:
-        """Check if there's a next song to play"""
-        return (
+        """PLay next song after current ends"""
+        if (
             self.current_song_index is not None
             and self.current_song_index < len(self.songs) - 1
-        )
+        ):
+            self.play_song(self.current_song_index + 1)
+        else:
+            self.stop()
 
     def toggle_play(self) -> None:
-        """Toggle play/pause with improved logic"""
-        if not self._is_vlc_available():
-            return
-
+        """Play/pause"""
         if self.current_song_index is None:
-            self._play_selected_or_first_song()
+            library = self.query_one("#library", ListView)
+            index = library.index if library.index is not None else 0
+            if index < len(self.songs):
+                self.play_song(index)
         else:
-            self._toggle_current_playback()
-
-    def _play_selected_or_first_song(self) -> None:
-        """Play selected song or first song if none selected"""
-        library = self.query_one("#library", ListView)
-        index = library.index if library.index is not None else 0
-        if index < len(self.songs):
-            self.play_song(index)
-
-    def _toggle_current_playback(self) -> None:
-        """Toggle playback of current song"""
-        if self.is_playing:
-            if self.vlc_player is not None:
+            if self.is_playing:
                 self.vlc_player.pause()
-            self.is_playing = False
-            if self.update_timer:
-                self.update_timer.pause()
-        else:
-            if self.vlc_player is not None:
+                self.is_playing = False
+                if self.update_timer:
+                    self.update_timer.pause()
+            else:
                 self.vlc_player.play()
-            self.is_playing = True
-            if self.update_timer:
-                self.update_timer.resume()
+                self.is_playing = True
+                if self.update_timer:
+                    self.update_timer.resume()
 
     def stop(self) -> None:
-        """Stop playback with complete UI reset"""
-        try:
-            if self._is_vlc_available() and self.vlc_player is not None:
-                self.vlc_player.stop()
-
-            self._reset_playback_state()
-            self._reset_ui_state()
-            self._stop_progress_timer()
-
-        except Exception as e:
-            logger.error(f"Error stopping playback: {e}")
-
-    def _reset_playback_state(self) -> None:
-        """Reset internal playback state"""
+        """HALT!"""
+        self.vlc_player.stop()
         self.is_playing = False
         self.current_time = 0
 
-    def _reset_ui_state(self) -> None:
-        """Reset UI to stopped state"""
-        progress_bar = self.query_one("#progress-bar", ProgressBar)
-        progress_bar.progress = 0
+        track_info = self.query_one("#current-track-info", Static)
+        track_info.update("♪ No track selected")
+        track_info.add_class("no-song")
+        track_info.remove_class("track-title")
 
-        time_display = self.query_one("#time-display", Static)
-        time_display.update("00:00 / 00:00")
-
-        current_song_widget = self.query_one("#current-song", Static)
-        current_song_widget.update("No song selected")
-        current_song_widget.remove_class("playing")
-
-    def _stop_progress_timer(self) -> None:
-        """Stop progress update timer"""
         if self.update_timer:
             self.update_timer.stop()
             self.update_timer = None
 
     def action_previous(self) -> None:
-        """Play previous song"""
+        """Play previous"""
         if self.current_song_index is not None and self.current_song_index > 0:
             self.play_song(self.current_song_index - 1)
         elif self.songs:
             self.play_song(len(self.songs) - 1)
 
     def action_next(self) -> None:
-        """Play next song"""
-        if self._has_next_song() and self.current_song_index is not None:
+        """Play next"""
+        if (
+            self.current_song_index is not None
+            and self.current_song_index < len(self.songs) - 1
+        ):
             self.play_song(self.current_song_index + 1)
         elif self.songs:
             self.play_song(0)
 
     def action_refresh(self) -> None:
-        """Refresh library"""
+        """Refresh"""
         self.stop()
         self.refresh_library()
 
     def action_toggle_play(self) -> None:
-        """Toggle play/pause action"""
+        """play/pause"""
         self.toggle_play()
 
     def action_stop(self) -> None:
@@ -482,40 +447,17 @@ class MusicPlayerScreen(Screen):
         self.stop()
 
     def action_back_to_welcome(self) -> None:
-        """Go back to welcome screen with proper cleanup"""
+        """Welcome"""
         self.stop()
-        self._cleanup_vlc()
         self.app.pop_screen()
 
     def action_quit(self) -> None:
-        """Quit application with proper cleanup"""
+        """Quit."""
         self.stop()
-        self._cleanup_vlc()
         self.app.exit()
 
-    def _cleanup_vlc(self) -> None:
-        """Clean up VLC resources"""
-        try:
-            if self.vlc_player:
-                self.vlc_player.release()
-            if self.vlc_instance:
-                self.vlc_instance.release()
-        except Exception as e:
-            logger.debug(f"Error during VLC cleanup: {e}")
-
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Handle song selection from library"""
-        try:
-            library = self.query_one("#library", ListView)
-            if library.index is not None and self._is_valid_song_index(library.index):
-                self.play_song(library.index)
-        except Exception as e:
-            logger.error(f"Error handling song selection: {e}")
-
-    def __del__(self) -> None:
-        """Cleanup when object is destroyed"""
-        try:
-            self._stop_progress_timer()
-            self._cleanup_vlc()
-        except Exception:
-            pass
+        """Simple song select"""
+        library = self.query_one("#library", ListView)
+        if library.index is not None and 0 <= library.index < len(self.songs):
+            self.play_song(library.index)

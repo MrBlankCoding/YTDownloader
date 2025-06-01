@@ -6,7 +6,7 @@ from typing import List, Dict
 import requests
 import asyncio
 
-from .errors import DownloadError
+from ..errors import DownloadError
 
 logger = logging.getLogger(__name__)
 

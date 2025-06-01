@@ -7,12 +7,14 @@ from textual.widgets import Header, Footer, Input, Static, ListView, ListItem
 from textual import work, on
 from textual.app import ComposeResult
 
-from Tool.youtube_api import YouTubeAPI
-from Tool.downloader import Downloader, DownloadError
+from Tool.utils.youtube_api import YouTubeAPI
+from Tool.utils.downloader import Downloader, DownloadError
 from Tool.screens.download_success import DownloadSuccessScreen
 
 logger = logging.getLogger(__name__)
 
+#This uses the YT api, so use accoringly
+# IM not sure about the limits, but I think it is 1000 requests per day????
 
 class SearchScreen(Screen):
     """Search screen"""
@@ -60,7 +62,6 @@ class SearchScreen(Screen):
         self.clear_results()
 
         try:
-            # Safely get max_search_results from app settings, with a fallback default
             max_results = 10  # Default value
             app_settings = getattr(self.app, "settings", None)
             if app_settings and hasattr(app_settings, "settings"):
