@@ -8,23 +8,25 @@ from Tool.screens.search import SearchScreen
 from Tool.screens.settings import SettingsScreen
 from Tool.screens.music_player import MusicPlayerScreen
 
+
 class WelcomeScreen(Screen):
     """Home screen"""
-    
+
     BINDINGS = [
         Binding("s", "start_search", "Start"),
         Binding("c", "open_settings", "Settings"),
         Binding("p", "open_player", "Player"),
         Binding("q", "quit", "Quit"),
         Binding("escape", "quit", "Quit"),
-        Binding("ctrl+c", "quit", "Quit")
+        Binding("ctrl+c", "quit", "Quit"),
     ]
-    
+
     def compose(self) -> ComposeResult:
         yield Header()
         with Container():
             with Vertical(id="welcome-container"):
-                yield Static("""
+                yield Static(
+                    """
     ╔══════════════════════════════════════════════════════════════╗
     ║  ██╗   ██╗████████╗    ██████╗  ██████╗ ██╗    ██╗███╗   ██  ║
     ║  ╚██╗ ██╔╝╚══██╔══╝    ██╔══██╗██╔═══██╗██║    ██║████╗  ██  ║
@@ -33,10 +35,14 @@ class WelcomeScreen(Screen):
     ║     ██║      ██║       ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████  ║
     ║     ╚═╝      ╚═╝       ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝ ║
     ╚══════════════════════════════════════════════════════════════╝
-                """, id="ascii-logo")
+                """,
+                    id="ascii-logo",
+                )
                 yield Static("", id="spacer1")
                 yield Static("YT Down", id="welcome-message")
-                yield Static("Download YT videos as MP3 files.", id="welcome-description")
+                yield Static(
+                    "Download YT videos as MP3 files.", id="welcome-description"
+                )
                 yield Static("", id="spacer2")
                 yield Static("Instructions:", id="instructions-title")
                 yield Static("• Search for music on YT", id="instruction1")
@@ -51,19 +57,19 @@ class WelcomeScreen(Screen):
                 yield Static("• Q: Quit", id="control4")
                 yield Static("", id="spacer4")
         yield Footer()
-    
+
     def action_start_search(self) -> None:
         """Start search"""
         self.app.push_screen(SearchScreen())
-    
+
     def action_open_settings(self) -> None:
         """Open settings screen"""
         self.app.push_screen(SettingsScreen())
-    
+
     def action_open_player(self) -> None:
         """Open music player"""
         self.app.push_screen(MusicPlayerScreen())
-    
+
     def action_quit(self) -> None:
         """Quit."""
-        self.app.exit() 
+        self.app.exit()
