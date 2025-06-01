@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import List, Dict
 import requests
 from dotenv import load_dotenv
+import json
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, ScrollableContainer, Vertical
-from textual.widgets import Header, Footer, Input, Static, ListView, ListItem
+from textual.widgets import Header, Footer, Input, Static, ListView, ListItem, Select, Button
 from textual.screen import Screen
 from textual.binding import Binding
 from textual import work, on
@@ -96,10 +97,46 @@ class YouTubeAPI:
         return " ".join(text.split())
 
 
+class Settings:
+    """Manage application settings"""
+    DEFAULT_SETTINGS = {
+        "download_path": str(Path("./downloads").resolve()),
+        "audio_quality": "0",  # 0 best
+        "max_search_results": 10
+    }
+    
+    def __init__(self):
+        self.settings_file = Path.home() / ".ytdownloader" / "settings.json"
+        self.settings = self.load_settings()
+    
+    def load_settings(self) -> dict:
+        """Load settings from file or return defaults"""
+        try:
+            if self.settings_file.exists():
+                with open(self.settings_file, 'r') as f:
+                    return {**self.DEFAULT_SETTINGS, **json.load(f)}
+            return self.DEFAULT_SETTINGS.copy()
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            return self.DEFAULT_SETTINGS.copy()
+    
+    def save_settings(self, settings: dict) -> None:
+        """Save settings to file"""
+        try:
+            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.settings_file, 'w') as f:
+                json.dump(settings, f, indent=4)
+            self.settings = settings
+        except Exception as e:
+            logger.error(f"Failed to save settings: {e}")
+            raise DownloadError(f"Failed to save settings: {e}")
+
+
 class Downloader:
     """Audio handling"""
     
-    def __init__(self):
+    def __init__(self, settings: Settings):
+        self.settings = settings
         self._check_ytdlp()
     
     def _check_ytdlp(self):
@@ -109,15 +146,14 @@ class Downloader:
         except (subprocess.CalledProcessError, FileNotFoundError):
             raise DownloadError("yt-dlp not found. Install with: pip install yt-dlp")
     
-    async def download(self, url: str, output_dir: str = "./downloads") -> Dict:
-        """Donwload audio (Specify output directory)"""
+    async def download(self, url: str) -> Dict:
+        """Download audio using settings"""
         return await asyncio.get_event_loop().run_in_executor(
-            None, self._download_sync, url, output_dir
+            None, self._download_sync, url, self.settings.settings["download_path"]
         )
     
     def _download_sync(self, url: str, output_dir: str) -> Dict:
         """synchronous download"""
-        #We only are downloading one track at a time 
         output_path = Path(output_dir).resolve()
         output_path.mkdir(parents=True, exist_ok=True)
         
@@ -125,7 +161,7 @@ class Downloader:
             "yt-dlp",
             "--extract-audio",
             "--audio-format", "mp3",
-            "--audio-quality", "0",
+            "--audio-quality", self.settings.settings["audio_quality"],
             "--output", str(output_path / "%(title)s.%(ext)s"),
             "--embed-metadata",
             "--no-warnings",
@@ -160,6 +196,7 @@ class WelcomeScreen(Screen):
     
     BINDINGS = [
         Binding("s", "start_search", "Start"),
+        Binding("c", "open_settings", "Settings"),
         Binding("q", "quit", "Quit"),
         Binding("escape", "quit", "Quit"),
         Binding("ctrl+c", "quit", "Quit")
@@ -188,12 +225,20 @@ class WelcomeScreen(Screen):
                 yield Static("• Navigate results with arrow keys", id="instruction2")
                 yield Static("• Download with Space or 'd'", id="instruction3")
                 yield Static("", id="spacer3")
-                yield Static("Press 'S' to Start or 'Q' to Quit", id="controls")
+                yield Static("Controls:", id="controls-title")
+                yield Static("• S: Start Search", id="control1")
+                yield Static("• C: Settings", id="control2")
+                yield Static("• Q: Quit", id="control3")
+                yield Static("", id="spacer4")
         yield Footer()
     
     def action_start_search(self) -> None:
         """Start search"""
         self.app.push_screen(SearchScreen())
+    
+    def action_open_settings(self) -> None:
+        """Open settings screen"""
+        self.app.push_screen(SettingsScreen())
     
     def action_quit(self) -> None:
         """Quit."""
@@ -239,7 +284,6 @@ class DownloadSuccessScreen(Screen):
     
     def action_back_to_welcome(self) -> None:
         """Go back home"""
-        # Pop all screens to get back to welcome
         while len(self.app.screen_stack) > 1:
             self.app.pop_screen()
     
@@ -263,7 +307,7 @@ class SearchScreen(Screen):
     def __init__(self):
         super().__init__()
         self.api = YouTubeAPI()
-        self.downloader = Downloader()
+        self.downloader = Downloader(self.app.settings)
         self.results = []
         self.download_in_progress = False
     
@@ -293,12 +337,14 @@ class SearchScreen(Screen):
         self.clear_results()
         
         try:
-            self.results = await self.api.search(query)
+            self.results = await self.api.search(
+                query, 
+                max_results=self.app.settings.settings["max_search_results"]
+            )
             if not self.results:
                 self.update_status("No results :(")
                 return
             
-            # Populate results list
             results_list = self.query_one("#results")
             for result in self.results:
                 results_list.mount(ListItem(Static(result["display"])))
@@ -371,6 +417,110 @@ class SearchScreen(Screen):
         results_list = self.query_one("#results")
         results_list.remove_children()
         self.results = []
+
+
+class SettingsScreen(Screen):
+    """Settings screen"""
+    
+    BINDINGS = [
+        Binding("escape", "back_to_welcome", "Back"),
+        Binding("ctrl+c", "quit", "Quit"),
+        Binding("s", "save_settings", "Save")
+    ]
+    
+    def __init__(self):
+        super().__init__()
+        self.settings = self.app.settings
+    
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Container():
+            with Vertical(id="settings-container"):
+                yield Static("Settings", id="settings-title")
+                yield Static("", id="spacer1")
+                
+                yield Static("Download Path:", id="path-label")
+                yield Input(
+                    value=self.settings.settings["download_path"],
+                    id="download-path-input"
+                )
+                
+                yield Static("", id="spacer2")
+                
+                # Audio Quality
+                yield Static("Audio Quality:", id="quality-label")
+                yield Select(
+                    [
+                        ("Best Quality", "0"),
+                        ("High Quality", "192"),
+                        ("Medium Quality", "128"),
+                        ("Low Quality", "64")
+                    ],
+                    value=self.settings.settings["audio_quality"],
+                    id="quality-select"
+                )
+                
+                yield Static("", id="spacer3")
+                yield Static("Max Search Results:", id="results-label")
+                yield Select(
+                    [
+                        ("5 results", "5"),
+                        ("10 results", "10"),
+                        ("15 results", "15"),
+                        ("20 results", "20"),
+                        ("25 results", "25")
+                    ],
+                    value=str(self.settings.settings["max_search_results"]),
+                    id="results-select"
+                )
+                
+                yield Static("", id="spacer4")
+                yield Button("Save Settings", id="save-button")
+                
+                yield Static("", id="spacer5")
+                yield Static("Press 'S' to save or 'ESC' to go back", id="controls")
+        yield Footer()
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press"""
+        if event.button.id == "save-button":
+            self.save_settings()
+    
+    def action_save_settings(self) -> None:
+        """Save settings"""
+        self.save_settings()
+    
+    def save_settings(self) -> None:
+        """Save current settings"""
+        try:
+            new_settings = {
+                "download_path": self.query_one("#download-path-input").value,
+                "audio_quality": self.query_one("#quality-select").value,
+                "max_search_results": int(self.query_one("#results-select").value)
+            }
+            
+            path = Path(new_settings["download_path"])
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
+            
+            self.settings.save_settings(new_settings)
+            self.app.settings = self.settings
+            if isinstance(self.app.screen, SearchScreen):
+                self.app.screen.downloader.settings = self.settings
+            
+            self.notify("Settings saved successfully!", severity="success")
+            self.app.pop_screen()
+            
+        except Exception as e:
+            self.notify(f"Failed to save settings: {e}", severity="error")
+    
+    def action_back_to_welcome(self) -> None:
+        """Go back to welcome screen"""
+        self.app.pop_screen()
+    
+    def action_quit(self) -> None:
+        """Quit application"""
+        self.app.exit()
 
 
 class YouTubeDownloaderApp(App):
@@ -487,12 +637,68 @@ class YouTubeDownloaderApp(App):
     #results > ListItem:hover {
         background: $accent 20%;
     }
+    
+    #settings-container {
+        align: center middle;
+        width: 80%;
+        height: 80%;
+    }
+    
+    #settings-title {
+        text-style: bold;
+        color: $primary;
+        text-align: center;
+        margin: 1;
+    }
+    
+    #path-label, #quality-label, #results-label {
+        text-style: bold;
+        color: $accent;
+        margin-top: 1;
+    }
+    
+    #download-path-input {
+        margin: 1;
+    }
+    
+    #quality-select, #results-select {
+        margin: 1;
+    }
+    
+    #save-button {
+        margin: 2;
+        width: 100%;
+    }
+    
+    #controls {
+        text-style: bold;
+        color: $success;
+        margin: 2;
+        text-align: center;
+    }
+    
+    #controls-title {
+        text-style: bold;
+        color: $accent;
+        margin-top: 1;
+        text-align: center;
+    }
+    
+    #control1, #control2, #control3 {
+        color: $text-muted;
+        margin-left: 2;
+        text-align: center;
+    }
     """
     
     TITLE = "YouTube Download"
     
+    def __init__(self):
+        super().__init__()
+        self.settings = Settings()
+    
     def on_mount(self) -> None:
-        """init"""
+        """Initialize app"""
         try:
             self.push_screen(WelcomeScreen())
         except DownloadError as e:
